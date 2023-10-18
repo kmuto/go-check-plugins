@@ -354,17 +354,14 @@ func (opts *logOpts) searchReader(ctx context.Context, rdr io.Reader) (warnNum, 
 
 		if opts.decoder != nil {
 			if opts.Encoding == "UTF-16le" {
-				// UTF-16 Little Endianをデコーダーに通すには0xff 0xfeのBOMが必須 (UTF-16 Big Endianは自前で処理される)
-				if lineBytes[0] != 0xff || lineBytes[1] != 0xfe {
-					if lineBytes[0] == 0x0 { // 行の先頭が0値だった場合は飛ばす
-						lineBytes = append([]byte{0xff, 0xfe}, lineBytes[1:]...)
-					} else { // XXX:ここにくることはないはず
-						lineBytes = append([]byte{0xff, 0xfe}, lineBytes[0:]...)
-					}
+				// Separating UTF-16 little endian lines by byte 0a ("\n")
+				// leaves 00 at the beginning. Remove it.
+				if lineBytes[0] == 0x00 {
+					lineBytes = lineBytes[1:]
 				}
-				lineBytes = lineBytes[:len(lineBytes)-1] // 末尾に\nがあるままdecoderに通すと化ける。不要なので削除する(UTF-16beでも同じ問題はおそらくある)
+				// Since it ends with "0a", use "0a 00" as UTF-16 little endian
+				lineBytes = append(lineBytes, 0x00)
 			}
-
 			lineBytes, err = opts.decoder.Bytes(lineBytes)
 			if err != nil {
 				break
